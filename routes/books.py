@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Book
+from models import db, Book, Student, StudentBook
 from datetime import datetime
 
 books_bp = Blueprint('books', __name__)
@@ -80,3 +80,47 @@ def delete_book(id):
     db.session.delete(book)
     db.session.commit()
     return jsonify({'message': 'Book deleted successfully'})
+
+# 🔹 Emprunter un livre
+@books_bp.route('/books/<int:book_id>/borrow', methods=['POST'])
+def borrow_book(book_id):
+    data = request.get_json()
+    student_id = data.get('student_id')
+
+    if not student_id:
+        return jsonify({'error': 'student_id is required'}), 400
+
+    book = Book.query.get(book_id)
+    student = Student.query.get(student_id)
+
+    if not book or not student:
+        return jsonify({'error': 'Book or Student not found'}), 404
+
+    existing_borrow = StudentBook.query.filter_by(book_id=book_id).first()
+    if existing_borrow:
+        return jsonify({'error': 'Book is already borrowed'}), 400
+
+    borrow_record = StudentBook(student_id=student_id, book_id=book_id)
+    db.session.add(borrow_record)
+    db.session.commit()
+
+    return jsonify({'message': f'Student {student_id} has borrowed book {book_id} successfully.'}), 200
+
+# 🔹 Rendre un livre
+@books_bp.route('/books/<int:book_id>/return', methods=['POST'])
+def return_book(book_id):
+    data = request.get_json()
+    student_id = data.get('student_id')
+
+    if not student_id:
+        return jsonify({'error': 'student_id is required'}), 400
+
+    borrow_record = StudentBook.query.filter_by(book_id=book_id, student_id=student_id).first()
+
+    if not borrow_record:
+        return jsonify({'error': 'No such borrow record found'}), 404
+
+    db.session.delete(borrow_record)
+    db.session.commit()
+
+    return jsonify({'message': f'Student {student_id} has returned book {book_id} successfully.'}), 200
